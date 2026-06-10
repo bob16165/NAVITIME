@@ -15,7 +15,7 @@ const placeAliases: Record<string, string> = {
 const fallbackPlaces: Record<string, GeocodeResult> = {
   "ヤサカ観光バス大阪支社": {
     title: "ヤサカ観光バス大阪支社",
-    address: "大阪府大阪市住之江区新北島8丁目2-70",
+    address: "大阪府大阪市西淀川区中島2-4-131",
     location: { lat: 34.620318, lng: 135.469388 }
   },
   "バスタ新宿": {
