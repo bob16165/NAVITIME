@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { recognize } from "tesseract.js";
 import HistoryPanel from "./components/HistoryPanel";
 import MapPanel from "./components/MapPanel";
@@ -73,6 +73,25 @@ const buildSimulationTrack = (polyline: [number, number][], steps = 90): LatLng[
   return points;
 };
 
+const nearestProgressOnPolyline = (polyline: [number, number][], point: LatLng) => {
+  if (polyline.length <= 1) return 0;
+
+  let bestIdx = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  polyline.forEach(([lat, lng], idx) => {
+    const dLat = lat - point.lat;
+    const dLng = lng - point.lng;
+    const distanceSq = dLat * dLat + dLng * dLng;
+    if (distanceSq < bestDistance) {
+      bestDistance = distanceSq;
+      bestIdx = idx;
+    }
+  });
+
+  return bestIdx / (polyline.length - 1);
+};
+
 function App() {
   const [originText, setOriginText] = useState("バスタ新宿");
   const [destText, setDestText] = useState("博多バスターミナル");
@@ -97,10 +116,14 @@ function App() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [navRouteId, setNavRouteId] = useState("");
   const [navTrack, setNavTrack] = useState<LatLng[]>([]);
+  const [gpsPosition, setGpsPosition] = useState<LatLng | null>(null);
+  const [gpsEnabled, setGpsEnabled] = useState(false);
   const [navIndex, setNavIndex] = useState(0);
   const [navHeadingDeg, setNavHeadingDeg] = useState(0);
   const [guidanceSteps, setGuidanceSteps] = useState<GuidanceStep[]>([]);
   const [spokenStepIndex, setSpokenStepIndex] = useState(-1);
+  const gpsWatchIdRef = useRef<number | null>(null);
+  const prevGpsPositionRef = useRef<LatLng | null>(null);
 
   const origin = useMemo(() => originPoint, [originPoint]);
   const destination = useMemo(() => destPoint, [destPoint]);
@@ -116,14 +139,19 @@ function App() {
   );
 
   const navProgress = useMemo(() => {
+    if (gpsEnabled && gpsPosition && navigatingRoute) {
+      return nearestProgressOnPolyline(navigatingRoute.polyline, gpsPosition);
+    }
     if (!navTrack.length || navTrack.length === 1) return 0;
     return navIndex / (navTrack.length - 1);
-  }, [navTrack.length, navIndex]);
+  }, [gpsEnabled, gpsPosition, navigatingRoute, navTrack.length, navIndex]);
 
   const navPosition = useMemo(() => {
-    if (!isNavigating || !navTrack.length) return null;
+    if (!isNavigating) return null;
+    if (gpsEnabled && gpsPosition) return gpsPosition;
+    if (!navTrack.length) return null;
     return navTrack[Math.min(navIndex, navTrack.length - 1)];
-  }, [isNavigating, navIndex, navTrack]);
+  }, [gpsEnabled, gpsPosition, isNavigating, navIndex, navTrack]);
 
   const navRemainingSec = useMemo(() => {
     if (!navigatingRoute) return 0;
@@ -283,6 +311,45 @@ function App() {
     const simTrack = buildSimulationTrack(selectedRoute.polyline);
     setNavTrack(simTrack);
     setNavIndex(0);
+    setGpsPosition(null);
+    setGpsEnabled(false);
+    prevGpsPositionRef.current = null;
+    if (gpsWatchIdRef.current !== null && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
+
+    if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const nextPos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setGpsPosition(nextPos);
+          setGpsEnabled(true);
+
+          const heading = position.coords.heading;
+          if (Number.isFinite(heading)) {
+            setNavHeadingDeg(Number(heading));
+          } else if (prevGpsPositionRef.current) {
+            setNavHeadingDeg(bearingDeg(prevGpsPositionRef.current, nextPos));
+          }
+
+          prevGpsPositionRef.current = nextPos;
+        },
+        () => {
+          setGpsEnabled(false);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 2000,
+          timeout: 10000
+        }
+      );
+      gpsWatchIdRef.current = watchId;
+    }
+
     setNavRouteId(selectedRoute.id);
     setIsNavigating(true);
     setGuidanceSteps(buildGuidanceSteps(selectedRoute, destText));
@@ -297,6 +364,13 @@ function App() {
   const stopNavigation = () => {
     setIsNavigating(false);
     setNavTrack([]);
+    setGpsPosition(null);
+    setGpsEnabled(false);
+    prevGpsPositionRef.current = null;
+    if (gpsWatchIdRef.current !== null && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
     setNavIndex(0);
     setNavRouteId("");
     setGuidanceSteps([]);
@@ -379,7 +453,7 @@ function App() {
   }, [destText, originPoint]);
 
   useEffect(() => {
-    if (!isNavigating || navTrack.length <= 1) return;
+    if (!isNavigating || gpsEnabled || navTrack.length <= 1) return;
 
     const timer = setInterval(() => {
       setNavIndex((current) => {
@@ -392,14 +466,22 @@ function App() {
     }, 500);
 
     return () => clearInterval(timer);
-  }, [isNavigating, navTrack]);
+  }, [gpsEnabled, isNavigating, navTrack]);
 
   useEffect(() => {
-    if (!isNavigating || navTrack.length <= 1) return;
+    if (!isNavigating || gpsEnabled || navTrack.length <= 1) return;
     const current = navTrack[Math.min(navIndex, navTrack.length - 1)];
     const next = navTrack[Math.min(navIndex + 1, navTrack.length - 1)];
     setNavHeadingDeg(bearingDeg(current, next));
-  }, [isNavigating, navIndex, navTrack]);
+  }, [gpsEnabled, isNavigating, navIndex, navTrack]);
+
+  useEffect(() => {
+    return () => {
+      if (gpsWatchIdRef.current !== null && typeof navigator !== "undefined" && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isNavigating || activeGuidanceStepIndex < 0) return;
