@@ -7,17 +7,5 @@
       "source": "/api/:path*",
       "destination": "/api/index"
     }
-  ],
-  "experimentalServices": {
-    "frontend": {
-      "root": "frontend",
-      "routePrefix": "/",
-      "framework": "vite"
-    },
-    "backend": {
-      "root": "backend",
-      "entrypoint": "src/server.ts",
-      "routePrefix": "/_/backend"
-    }
-  }
+  ]
 }
