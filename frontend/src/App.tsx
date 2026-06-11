@@ -48,7 +48,7 @@ const speakJapanese = (text: string) => {
   window.speechSynthesis.speak(utterance);
 };
 
-const buildSimulationTrack = (polyline: [number, number][], steps = 90): LatLng[] => {
+const buildSimulationTrack = (polyline: [number, number][], steps = 200): LatLng[] => {
   if (polyline.length <= 1) {
     const p = polyline[0] ?? [defaultOrigin.lat, defaultOrigin.lng];
     return [{ lat: p[0], lng: p[1] }];
@@ -463,7 +463,7 @@ function App() {
         }
         return current + 1;
       });
-    }, 500);
+    }, 200); // 200ms間隔でより滑らかな走行表示
 
     return () => clearInterval(timer);
   }, [gpsEnabled, isNavigating, navTrack]);
@@ -495,113 +495,6 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="hero">
-        <h1>Tour Bus NAVI</h1>
-        <p>観光バス対応ルート・リアルタイム交通・大型車対応駐車場検索</p>
-      </header>
-
-      <section className="panel controls">
-        <label>
-          行程表の写真から自動入力
-          <input type="file" accept="image/*" capture="environment" onChange={handleItineraryImage} />
-        </label>
-        <small className="helper-text">
-          行程表を撮影すると、出発地・経由地・目的地を抽出します。社庫はヤサカ観光バス大阪支社として扱います。
-        </small>
-        {ocrLoading && <small>行程表を読み取り中...</small>}
-        {ocrPreview && !ocrLoading && <p className="ocr-preview">OCR結果: {ocrPreview.slice(0, 160)}{ocrPreview.length > 160 ? "..." : ""}</p>}
-        <label>
-          出発地 (日本語地名)
-          <input value={originText} onChange={(e) => setOriginText(e.target.value)} />
-        </label>
-        {originSuggestLoading && <small>出発地候補を検索中...</small>}
-        {originCandidates.length > 0 && (
-          <div className="candidate-list">
-            {originCandidates.slice(0, 5).map((item) => (
-              <button
-                key={`${item.title}-${item.address}`}
-                className="candidate-item"
-                onClick={() => {
-                  setOriginText(item.title);
-                  setOriginPoint(item.location);
-                }}
-              >
-                <strong>{item.title}</strong>
-                <small>{item.address}</small>
-              </button>
-            ))}
-          </div>
-        )}
-        <label>
-          目的地 (日本語地名)
-          <input value={destText} onChange={(e) => setDestText(e.target.value)} />
-        </label>
-        {destSuggestLoading && <small>目的地候補を検索中...</small>}
-        {destCandidates.length > 0 && (
-          <div className="candidate-list">
-            {destCandidates.slice(0, 5).map((item) => (
-              <button
-                key={`${item.title}-${item.address}`}
-                className="candidate-item"
-                onClick={() => {
-                  setDestText(item.title);
-                  setDestPoint(item.location);
-                }}
-              >
-                <strong>{item.title}</strong>
-                <small>{item.address}</small>
-              </button>
-            ))}
-          </div>
-        )}
-        <label>
-          経由地 (改行区切り)
-          <textarea value={waypointText} onChange={(e) => setWaypointText(e.target.value)} rows={4} />
-        </label>
-        <div className="actions">
-          <button onClick={() => void searchRoutes()} disabled={loading}>
-            {loading || searchingPlace ? "検索中..." : "ルート検索"}
-          </button>
-          <button onClick={() => void storeCurrentRoute()} disabled={!selectedRouteId}>
-            ルート履歴に保存
-          </button>
-          {!isNavigating ? (
-            <button onClick={() => void startNavigation()} disabled={!selectedRouteId}>
-              このルートでナビ開始
-            </button>
-          ) : (
-            <button onClick={stopNavigation}>ナビ停止</button>
-          )}
-        </div>
-        {error && <p className="error">{error}</p>}
-      </section>
-
-      {isNavigating && navigatingRoute && (
-        <section className="panel nav-panel">
-          <h2>ナビ案内中: {navigatingRoute.label}</h2>
-          <div className="nav-metrics">
-            <span>残り時間: {min(navRemainingSec)}</span>
-            <span>残り距離: {km(navRemainingM)}</span>
-            <span>進行率: {Math.round(navProgress * 100)}%</span>
-          </div>
-          {activeGuidanceStepIndex >= 0 && (
-            <p className="current-guide">案内: {guidanceSteps[activeGuidanceStepIndex]?.text}</p>
-          )}
-          <div className="step-list">
-            {guidanceSteps.map((step, idx) => (
-              <div
-                key={`${step.progress}-${step.text}`}
-                className={`step-item ${idx === activeGuidanceStepIndex ? "active" : ""} ${
-                  idx < activeGuidanceStepIndex ? "done" : ""
-                }`}
-              >
-                {step.text}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       <MapPanel
         center={origin}
         routes={routes}
@@ -614,8 +507,83 @@ function App() {
         isNavigating={isNavigating}
       />
 
-      <RouteSelector routes={routes} selectedRouteId={selectedRouteId} onSelect={setSelectedRouteId} />
-      <HistoryPanel history={history} />
+      <header className="hero">
+        <h1>Tour Bus NAVI</h1>
+      </header>
+
+      {!isNavigating && (
+        <section className="panel controls">
+          <label>
+            行程表の写真から自動入力
+            <input type="file" accept="image/*" capture="environment" onChange={handleItineraryImage} />
+          </label>
+          <small className="helper-text">
+            行程表を撮影すると、出発地・経由地・目的地を抽出します。社庫はヤサカ観光バス大阪支社として扱います。
+          </small>
+          {ocrLoading && <small>行程表を読み取り中...</small>}
+          {ocrPreview && !ocrLoading && <p className="ocr-preview">OCR結果: {ocrPreview.slice(0, 160)}{ocrPreview.length > 160 ? "..." : ""}</p>}
+          <label>
+            出発地 (日本語地名)
+            <input value={originText} onChange={(e) => setOriginText(e.target.value)} />
+          </label>
+          {originSuggestLoading && <small>出発地候補を検索中...</small>}
+          {originCandidates.length > 0 && (
+            <div className="candidate-list">
+              {originCandidates.slice(0, 5).map((item) => (
+                <button
+                  key={`${item.title}-${item.address}`}
+                  className="candidate-item"
+                  onClick={() => {
+                    setOriginText(item.title);
+                    setOriginPoint(item.location);
+                  }}
+                >
+                  <strong>{item.title}</strong>
+                  <small>{item.address}</small>
+                </button>
+              ))}
+            </div>
+          )}
+          <label>
+            目的地 (日本語地名)
+            <input value={destText} onChange={(e) => setDestText(e.target.value)} />
+          </label>
+          {destSuggestLoading && <small>目的地候補を検索中...</small>}
+          {destCandidates.length > 0 && (
+            <div className="candidate-list">
+              {destCandidates.slice(0, 5).map((item) => (
+                <button
+                  key={`${item.title}-${item.address}`}
+                  className="candidate-item"
+                  onClick={() => {
+                    setDestText(item.title);
+                    setDestPoint(item.location);
+                  }}
+                >
+                  <strong>{item.title}</strong>
+                  <small>{item.address}</small>
+                </button>
+              ))}
+            </div>
+          )}
+          <label>
+            経由地 (改行区切り)
+            <textarea value={waypointText} onChange={(e) => setWaypointText(e.target.value)} rows={3} />
+          </label>
+          <div className="actions">
+            <button onClick={() => void searchRoutes()} disabled={loading} style={{ flex: 1 }}>
+              {loading || searchingPlace ? "検索中..." : "ルート検索"}
+            </button>
+            <button onClick={() => void startNavigation()} disabled={!selectedRouteId} style={{ flex: 1 }}>
+              ナビ開始
+            </button>
+          </div>
+          {error && <p className="error">{error}</p>}
+
+          <RouteSelector routes={routes} selectedRouteId={selectedRouteId} onSelect={setSelectedRouteId} />
+          <HistoryPanel history={history} />
+        </section>
+      )}
     </div>
   );
 }
