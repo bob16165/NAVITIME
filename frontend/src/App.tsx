@@ -27,16 +27,57 @@ const bearingDeg = (from: LatLng, to: LatLng): number => {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 };
 
+const angleDiff = (b1: number, b2: number): number => {
+  let d = b2 - b1;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+};
+
 const buildGuidanceSteps = (route: RouteOption, destName: string): GuidanceStep[] => {
-  const roadHint = route.hasTollRoad ? "まもなく高速道路方面です" : "一般道を直進します";
-  return [
-    { progress: 0, text: "ナビを開始します。安全運転で出発してください" },
-    { progress: 0.15, text: roadHint },
-    { progress: 0.45, text: "次の主要交差点を右方向です" },
-    { progress: 0.7, text: "この先、渋滞情報に注意して進んでください" },
-    { progress: 0.9, text: `${destName} 周辺です。減速してください` },
-    { progress: 0.99, text: "目的地に到着です" }
-  ];
+  const steps: GuidanceStep[] = [];
+  steps.push({ progress: 0, text: "ナビを開始します。安全運転で出発してください" });
+
+  if (route.hasTollRoad) {
+    steps.push({ progress: 0.05, text: "まもなく高速道路の入口です" });
+  } else {
+    steps.push({ progress: 0.05, text: "一般道を直進します" });
+  }
+
+  const poly = route.polyline;
+  const total = poly.length;
+  if (total >= 3) {
+    const stride = Math.max(1, Math.floor(total / 60));
+    let lastTurnProgress = 0.05;
+
+    for (let i = stride; i < total - stride; i += stride) {
+      const prev = { lat: poly[i - stride][0], lng: poly[i - stride][1] };
+      const curr = { lat: poly[i][0], lng: poly[i][1] };
+      const next = { lat: poly[Math.min(i + stride, total - 1)][0], lng: poly[Math.min(i + stride, total - 1)][1] };
+      const b1 = bearingDeg(prev, curr);
+      const b2 = bearingDeg(curr, next);
+      const diff = angleDiff(b1, b2);
+      const progress = i / (total - 1);
+
+      if (Math.abs(diff) > 28 && progress - lastTurnProgress > 0.08) {
+        const remainingKm = Math.round(((1 - progress) * route.distanceM) / 1000);
+        let dir: string;
+        if (diff >= 120) dir = "Uターン（右）";
+        else if (diff >= 60) dir = "右折";
+        else if (diff >= 28) dir = "やや右方向";
+        else if (diff <= -120) dir = "Uターン（左）";
+        else if (diff <= -60) dir = "左折";
+        else dir = "やや左方向";
+        steps.push({ progress, text: `${dir}です（残り約${remainingKm}km）` });
+        lastTurnProgress = progress;
+      }
+    }
+  }
+
+  steps.push({ progress: 0.9, text: `${destName}周辺です。減速してください` });
+  steps.push({ progress: 0.99, text: "目的地に到着です" });
+
+  return steps.sort((a, b) => a.progress - b.progress);
 };
 
 const speakJapanese = (text: string) => {
@@ -510,6 +551,22 @@ function App() {
       <header className="hero">
         <h1>Tour Bus NAVI</h1>
       </header>
+
+      {isNavigating && (
+        <>
+          <button className="nav-back-btn" onClick={stopNavigation}>
+            ← トップへ戻る
+          </button>
+          <div className="nav-guidance-panel">
+            <div className="nav-guidance-text">
+              {guidanceSteps[activeGuidanceStepIndex]?.text ?? "案内を準備中..."}
+            </div>
+            <div className="nav-remaining">
+              残り {min(navRemainingSec)} &nbsp;／&nbsp; {km(navRemainingM)}
+            </div>
+          </div>
+        </>
+      )}
 
       {!isNavigating && (
         <section className="panel controls">

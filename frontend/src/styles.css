@@ -286,6 +286,60 @@ button:disabled {
   color: var(--danger);
 }
 
+/* ナビ中: 左上「トップへ戻る」ボタン */
+.nav-back-btn {
+  position: fixed;
+  top: 58px;
+  left: 12px;
+  z-index: 30;
+  background: rgba(15, 23, 42, 0.88);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.nav-back-btn:hover {
+  background: rgba(15, 23, 42, 1);
+  transform: translateY(-1px);
+}
+
+/* ナビ中: 下部ガイダンスパネル */
+.nav-guidance-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: rgba(18, 52, 59, 0.96);
+  backdrop-filter: blur(8px);
+  padding: 14px 16px 20px;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.nav-guidance-text {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.nav-remaining {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ff7a00;
+  letter-spacing: 0.02em;
+}
+
 .nav-panel {
   position: fixed;
   bottom: 0;

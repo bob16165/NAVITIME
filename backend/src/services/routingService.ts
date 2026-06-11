@@ -80,37 +80,37 @@ const mockRoutes = async (origin: LatLng, destination: LatLng, waypoints: LatLng
 
   return [
     {
-      id: "mock-fast",
-      label: "最短時間ルート",
-      durationSec: 5600,
-      distanceM: 84500,
-      baseDurationSec: 4900,
-      trafficDelaySec: 700,
+      id: "mock-recommended",
+      label: "おすすめ",
+      durationSec: 5900,
+      distanceM: 82000,
+      baseDurationSec: 5400,
+      trafficDelaySec: 500,
       hasTollRoad: true,
       polyline: basePolyline,
-      summaryText: "高速優先。渋滞影響あり"
+      summaryText: "時間・料金・快適性のバランスが最良"
     },
     {
-      id: "mock-balance",
-      label: "バランスルート",
-      durationSec: 6100,
-      distanceM: 79200,
-      baseDurationSec: 5700,
-      trafficDelaySec: 400,
-      hasTollRoad: false,
+      id: "mock-toll",
+      label: "有料道優先",
+      durationSec: 5200,
+      distanceM: 86000,
+      baseDurationSec: 4700,
+      trafficDelaySec: 500,
+      hasTollRoad: true,
       polyline: makeVariant(basePolyline, 0.015, -0.01),
-      summaryText: "一般道中心。大型車通行可の道路を優先"
+      summaryText: "高速道路を最大限活用。最短時間"
     },
     {
-      id: "mock-safe",
-      label: "安全優先ルート",
-      durationSec: 6900,
-      distanceM: 90500,
-      baseDurationSec: 6600,
+      id: "mock-local",
+      label: "一般優先",
+      durationSec: 7100,
+      distanceM: 78500,
+      baseDurationSec: 6800,
       trafficDelaySec: 300,
       hasTollRoad: false,
       polyline: makeVariant(basePolyline, -0.01, 0.012),
-      summaryText: "狭隘路回避を重視"
+      summaryText: "有料道不使用。一般道・大型車通行可路線を優先"
     }
   ];
 };
