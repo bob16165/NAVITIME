@@ -73,20 +73,50 @@ const geocodeJapanesePlace = async (query, at) => {
 };
 
 // ---- Routing mock ----
-const buildPolylinePoints = (origin, destination, waypoints) => [
-  [origin.lat, origin.lng],
-  ...waypoints.map(point => [point.lat, point.lng]),
-  [destination.lat, destination.lng]
-];
+// ---- Routing ----
+const buildFallbackPolyline = (origin, destination, waypoints) => {
+  const points = [origin, ...waypoints, destination];
+  const result = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    const steps = 12;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const lat = a.lat + (b.lat - a.lat) * t + Math.sin(t * Math.PI) * 0.08 * (i % 2 === 0 ? 1 : -1);
+      const lng = a.lng + (b.lng - a.lng) * t;
+      result.push([lat, lng]);
+    }
+  }
+  return result;
+};
 
-const mockRoutes = (origin, destination, waypoints) => [
-  { id: "mock-fast",    label: "最短時間ルート",   durationSec: 5600,  distanceM: 84500,  baseDurationSec: 4900,  trafficDelaySec: 700, hasTollRoad: true,  polyline: buildPolylinePoints(origin, destination, waypoints), summaryText: "高速優先。渋滞影響あり" },
-  { id: "mock-balance", label: "バランスルート",   durationSec: 6100,  distanceM: 79200,  baseDurationSec: 5700,  trafficDelaySec: 400, hasTollRoad: false, polyline: buildPolylinePoints(origin, destination, waypoints), summaryText: "一般道中心" },
-  { id: "mock-safe",    label: "安全優先ルート",   durationSec: 6900,  distanceM: 90500,  baseDurationSec: 6600,  trafficDelaySec: 300, hasTollRoad: false, polyline: buildPolylinePoints(origin, destination, waypoints), summaryText: "狭隘路回避を重視" }
-];
+const fetchOsrmPolyline = async (origin, destination, waypoints) => {
+  const allPoints = [origin, ...waypoints, destination];
+  const coords = allPoints.map(p => `${p.lng},${p.lat}`).join(";");
+  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+  const res = await axios.get(url, { timeout: 15000, headers: { "User-Agent": "tour-bus-navitime-webapp/0.1" } });
+  const coords2d = res.data?.routes?.[0]?.geometry?.coordinates;
+  if (!Array.isArray(coords2d) || coords2d.length < 2) throw new Error("OSRM empty");
+  return coords2d.map(([lng, lat]) => [lat, lng]);
+};
+
+const mockRoutes = async (origin, destination, waypoints) => {
+  let basePolyline;
+  try {
+    basePolyline = await fetchOsrmPolyline(origin, destination, waypoints);
+  } catch {
+    basePolyline = buildFallbackPolyline(origin, destination, waypoints);
+  }
+  const offset = (polyline, dLat, dLng) => polyline.map(([lat, lng]) => [lat + dLat, lng + dLng]);
+  return [
+    { id: "mock-fast",    label: "最短時間ルート",   durationSec: 5600,  distanceM: 84500,  baseDurationSec: 4900,  trafficDelaySec: 700, hasTollRoad: true,  polyline: basePolyline, summaryText: "高速優先。渋滞影響あり" },
+    { id: "mock-balance", label: "バランスルート",   durationSec: 6100,  distanceM: 79200,  baseDurationSec: 5700,  trafficDelaySec: 400, hasTollRoad: false, polyline: offset(basePolyline, 0.015, -0.01), summaryText: "一般道中心" },
+    { id: "mock-safe",    label: "安全優先ルート",   durationSec: 6900,  distanceM: 90500,  baseDurationSec: 6600,  trafficDelaySec: 300, hasTollRoad: false, polyline: offset(basePolyline, -0.01, 0.012), summaryText: "狭隘路回避を重視" }
+  ];
+};
 
 const getRoutes = async (origin, destination, waypoints = []) => {
-  if (!hasHereKey) return mockRoutes(origin, destination, waypoints);
+  if (!hasHereKey) return await mockRoutes(origin, destination, waypoints);
 
   const params = new URLSearchParams({
     transportMode: "truck",
